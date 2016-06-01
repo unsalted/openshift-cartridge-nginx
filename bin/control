@@ -215,7 +215,6 @@ function build() {
 
 case "$1" in
   start)
-    _forward_control_to_plugin "$1"
     start
   ;;
   stop)      stop ;;
@@ -224,11 +223,9 @@ case "$1" in
   reload)    reload ;;
   tidy)      tidy ;;
   update)
-    _forward_control_to_plugin "$1"
     update
   ;;
   build)
-    _forward_control_to_plugin "$1"
     build
   ;;
   *)         exit 0
