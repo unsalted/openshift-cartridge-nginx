@@ -9,8 +9,8 @@ export STOPTIMEOUT=20
 export STARTTIMEOUT=20
 
 NGINX_EXEC=${OPENSHIFT_NGINX_VERSION_DIR}/sbin/nginx
-NGINX_CONFIG_FILE=${OPENSHIFT_ELASTICSEARCH_DIR}/conf/nginx.conf
-NGINX_HTTP_CONFIG_FILE=${OPENSHIFT_ELASTICSEARCH_DIR}/conf/nginx_http.conf
+NGINX_CONFIG_FILE=${OPENSHIFT_NGINX_DIR}/conf/nginx.conf
+NGINX_HTTP_CONFIG_FILE=${OPENSHIFT_NGINX_DIR}/conf/nginx_http.conf
 
 function _es_isrunning() {
   if [ -f $PID_FILE ]; then
@@ -100,7 +100,7 @@ function _nginx_has_config() {
 
 function _nginx_start() {
     if _nginx_has_config; then
-        ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -p ${OPENSHIFT_ELASTICSEARCH_DIR} 2>&1
+        ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -p ${OPENSHIFT_NGINX_DIR} 2>&1
 
         if [ $? -ne 0 ]; then
             echo "Error starting nginx"
@@ -120,7 +120,7 @@ function _nginx_stop() {
     # Check pid file
     if `ps -p ${pid} > /dev/null 2>&1`; then
         if _nginx_has_config; then
-            ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -p ${OPENSHIFT_ELASTICSEARCH_DIR} -s stop  2>&1
+            ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -p ${OPENSHIFT_NGINX_DIR} -s stop  2>&1
         else
             /bin/kill -9 ${pid}
         fi
@@ -200,7 +200,7 @@ function reload() {
 }
 
 function tidy() {
-    client_message "Emptying log dir: ${OPENSHIFT_ELASTICSEARCH_DIR}/logs"
+    client_message "Emptying log dir: ${OPENSHIFT_NGINX_DIR}/logs"
     shopt -s dotglob
     rm -rf logs/*
 }
@@ -213,8 +213,16 @@ function build() {
     _nginx_update_conf
 }
 
+function _forward_control_to_plugin() {
+    # Because plugins don't receive some command we forward them
+    if [ ! -z ${OPENSHIFT_PHP_DIR} ]; then
+        ${OPENSHIFT_PHP_DIR}/bin/control "$1"
+    fi
+}
+
 case "$1" in
   start)
+    _forward_control_to_plugin "$1"
     start
   ;;
   stop)      stop ;;
@@ -223,9 +231,11 @@ case "$1" in
   reload)    reload ;;
   tidy)      tidy ;;
   update)
+    _forward_control_to_plugin "$1"
     update
   ;;
   build)
+    _forward_control_to_plugin "$1"
     build
   ;;
   *)         exit 0

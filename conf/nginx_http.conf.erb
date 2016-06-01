@@ -27,7 +27,7 @@ gzip_disable        "MSIE [1-6]\.";
 gzip_vary           on;
 
 server {
-    listen  <%= ENV['OPENSHIFT_NGINX_IP'] %>:<%= ENV['OPENSHIFT_NGINX_PORT'] %>;
+    listen  <%= ENV['OPENSHIFT_ELASTICSEARCH_IP'] %>:<%= ENV['OPENSHIFT_ELASTICSEARCH_PORT'] %>;
     root    <%= ENV['OPENSHIFT_REPO_DIR'] %>/public;
 
     location / {
