@@ -1,7 +1,8 @@
 Name: elasticsearch
 Cartridge-Short-Name: ELASTICSEARCH
-Display-Name: Elasticsearch
-Version: "2.3.3"
+Display-Name: Elasticsearch 2.3.3
+Description: "Elasticsearch 2.3.3 x NGINX"
+Version: 2.3.3
 Versions: ["2.3.3"]
 Website: https://github.com/boekkooi/openshift-cartridge-nginx
 Cartridge-Version: 0.0.3
