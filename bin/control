@@ -1,16 +1,30 @@
 #!/bin/bash
 set -e
 
+PID_FILE=$OPENSHIFT_ELASTICSEARCH_DIR/run/elasticsearch.pid
+
 source ${OPENSHIFT_CARTRIDGE_SDK_BASH}
 
 export STOPTIMEOUT=20
 export STARTTIMEOUT=20
 
 NGINX_EXEC=${OPENSHIFT_NGINX_VERSION_DIR}/sbin/nginx
-NGINX_CONFIG_FILE=${OPENSHIFT_NGINX_DIR}/conf/nginx.conf
-NGINX_HTTP_CONFIG_FILE=${OPENSHIFT_NGINX_DIR}/conf/nginx_http.conf
+NGINX_CONFIG_FILE=${OPENSHIFT_ELASTICSEARCH_DIR}/conf/nginx.conf
+NGINX_HTTP_CONFIG_FILE=${OPENSHIFT_ELASTICSEARCH_DIR}/conf/nginx_http.conf
 
-function isrunning() {
+function _es_isrunning() {
+  if [ -f $PID_FILE ]; then
+    local zpid=$(cat $PID_FILE 2> /dev/null)
+    local myid=$(id -u)
+    if `ps -opid,args --pid $zpid 2>&1 &> /dev/null`; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+function _nginx_isrunning() {
     if [ -f "${OPENSHIFT_NGINX_PID}" ]; then
         local pid=`cat ${OPENSHIFT_NGINX_PID} 2> /dev/null`
         [ -z "${pid}" ]  &&  return 1
@@ -24,7 +38,54 @@ function isrunning() {
     return 1
 }
 
-function hasconfig() {
+function _es_install_plugins()
+{
+  local PLUGIN_CMD="$OPENSHIFT_ELASTICSEARCH_DIR/usr/bin/plugin -Des.path.plugins=$OPENSHIFT_DATA_DIR/elasticsearch-plugins"
+
+  local old_plugins=$($PLUGIN_CMD list | awk '/-/{print $2}' | xargs)
+  if [ -n "$old_plugins"  -a "$old_plugins" != "No" ]; then #ARGH!
+    echo "Removing old ElasticSearch plugins..."
+    for plugin in $old_plugins; do
+      $PLUGIN_CMD remove $plugin
+    done
+  fi
+
+  echo "Installing ElasticSearch plugins..."
+
+  local plugins="$(grep -v '^#' $OPENSHIFT_REPO_DIR/plugins.txt 2>/dev/null | xargs)"
+
+  if [ "${plugins}" ]; then
+    for plugin in ${plugins}; do
+      local name=$(echo $plugin | cut -f 1 -d =)
+      local url=$(echo $plugin | cut -f 2 -d =)
+      if [ "$name" == "$url" ]; then
+        $PLUGIN_CMD install $name
+      else
+        $PLUGIN_CMD install $url
+      fi
+    done
+  fi
+}
+
+function _es_copy_config()
+{
+  echo "Copying ElasticSearch config..."
+  cp $OPENSHIFT_REPO_DIR/elasticsearch.yml $OPENSHIFT_ELASTICSEARCH_DIR/usr/config/elasticsearch.yml
+}
+
+function _es_isrunning() {
+  if [ -f $PID_FILE ]; then
+    local zpid=$(cat $PID_FILE 2> /dev/null)
+    local myid=$(id -u)
+    if `ps -opid,args --pid $zpid 2>&1 &> /dev/null`; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+function _nginx_has_config() {
     if [ ! -f "${NGINX_CONFIG_FILE}" ]; then
         echo "Missing conf/nginx.conf in cartridge."
         return 1
@@ -38,12 +99,12 @@ function hasconfig() {
 }
 
 function _nginx_start() {
-    if hasconfig; then
-        ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -p ${OPENSHIFT_NGINX_DIR} 2>&1
+    if _nginx_has_config; then
+        ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -p ${OPENSHIFT_ELASTICSEARCH_DIR} 2>&1
 
         if [ $? -ne 0 ]; then
             echo "Error starting nginx"
-        elif ! isrunning; then
+        elif ! _nginx_isrunning; then
             local TIMEOUT="${STARTTIMEOUT}"
             while [ ${TIMEOUT} -gt 0 ] && [ ! -f "${OPENSHIFT_NGINX_PID}" ]; do
                 sleep .5
@@ -58,8 +119,8 @@ function _nginx_stop() {
 
     # Check pid file
     if `ps -p ${pid} > /dev/null 2>&1`; then
-        if hasconfig; then
-            ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -p ${OPENSHIFT_NGINX_DIR} -s stop  2>&1
+        if _nginx_has_config; then
+            ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -p ${OPENSHIFT_ELASTICSEARCH_DIR} -s stop  2>&1
         else
             /bin/kill -9 ${pid}
         fi
@@ -94,19 +155,19 @@ function _nginx_update_conf() {
 }
 
 function start() {
-    if isrunning; then
+    if _nginx_isrunning; then
         _nginx_stop
     fi
 
     _nginx_update_conf
     _nginx_start
-    isrunning && echo "Nginx instance is started"
+    _nginx_isrunning && echo "Nginx instance is started"
 }
 
 
 function stop() {
     _nginx_stop
-    isrunning  ||  echo "Nginx instance is stopped"
+    _nginx_isrunning  ||  echo "Nginx instance is stopped"
 }
 
 
@@ -114,12 +175,12 @@ function restart() {
     _nginx_stop || pkill nginx || :
     _nginx_start
 
-    isrunning  &&  echo "Restarted Nginx instance"
+    _nginx_isrunning  &&  echo "Restarted Nginx instance"
 }
 
 
 function status() {
-    if isrunning; then
+    if _nginx_isrunning; then
         client_result "Nginx is running"
     else
         client_result "Nginx is stopped"
@@ -128,18 +189,18 @@ function status() {
 
 
 function reload() {
-    if ! isrunning; then
+    if ! _nginx_isrunning; then
        _nginx_start
-    elif hasconfig; then
+    elif _nginx_has_config; then
        echo "`date`: Reloading Nginx " 1>&2
         ${NGINX_EXEC} -c ${NGINX_CONFIG_FILE} -s reload 2>&1
     fi
 
-    isrunning  &&  echo "Reloaded Nginx instance"
+    _nginx_isrunning  &&  echo "Reloaded Nginx instance"
 }
 
 function tidy() {
-    client_message "Emptying log dir: ${OPENSHIFT_NGINX_DIR}/logs"
+    client_message "Emptying log dir: ${OPENSHIFT_ELASTICSEARCH_DIR}/logs"
     shopt -s dotglob
     rm -rf logs/*
 }
@@ -150,13 +211,6 @@ function update() {
 
 function build() {
     _nginx_update_conf
-}
-
-function _forward_control_to_plugin() {
-    # Because plugins don't receive some command we forward them
-    if [ ! -z ${OPENSHIFT_PHP_DIR} ]; then
-        ${OPENSHIFT_PHP_DIR}/bin/control "$1"
-    fi
 }
 
 case "$1" in

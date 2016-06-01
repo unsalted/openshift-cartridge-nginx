@@ -1,18 +1,22 @@
-Name: nginx
-Cartridge-Short-Name: NGINX
-Display-Name: Nginx
-Version: "1.9.12"
-Versions: ["1.9.12"]
+Name: elasticsearch
+Cartridge-Short-Name: ELASTICSEARCH
+Display-Name: Elasticsearch
+Version: "2.3.3"
+Versions: ["2.3.3"]
 Website: https://github.com/boekkooi/openshift-cartridge-nginx
 Cartridge-Version: 0.0.3
 Cartridge-Vendor: boekkooi
 Categories:
+  - elasticsearch
+  - nginx
   - web_framework
   - service
-  - nginx
 Provides:
+  - elasticsearch-2.3.3
   - nginx-1.9
   - nginx
+  - elasticsearch
+
 Scaling:
   Min: 1
   Max: -1

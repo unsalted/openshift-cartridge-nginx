@@ -54,5 +54,5 @@ http {
     sendfile on;
     keepalive_timeout 65;
 
-    include  <%= ENV['OPENSHIFT_NGINX_DIR'] %>/conf/nginx_http.conf;
+    include  <%= ENV['OPENSHIFT_ELASTICSEARCH_DIR'] %>/conf/nginx_http.conf;
 }
