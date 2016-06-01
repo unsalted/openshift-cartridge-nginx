@@ -22,10 +22,10 @@ Scaling:
   Min: 1
   Max: -1
 Cart-Data:
-  - Key: OPENSHIFT_ELASTICSEARCH_PORT
+  - Key: OPENSHIFT_NGINX_PORT
     Type: environment
     Description: "Internal port to which the web-framework binds to."
-  - Key: OPENSHIFT_ELASTICSEARCH_IP
+  - Key: OPENSHIFT_NGINX_IP
     Type: environment
     Description: "Internal IP to which the web-framework binds to."
 Publishes:
